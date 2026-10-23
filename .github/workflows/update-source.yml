@@ -1,0 +1,37 @@
+name: update-source
+on:
+  schedule:
+    - cron: "0 */6 * * *" # every 6 hours
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-source
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Regenerate source.json
+        env:
+          SOURCE_BASE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 gen_source.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name "source-bot"
+          git config user.email "actions@github.com"
+          git add source.json
+          git diff --cached --quiet && echo "no change" && exit 0
+          git commit -m "source: follow upstream $(python3 -c 'import json;print(json.load(open("source.json"))["apps"][0]["version"])')"
+          git push
